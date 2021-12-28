@@ -8,14 +8,26 @@ import json
 import datetime
 import re
 from ipaddress import ip_address, IPv4Address
+import os
 
 import requests
 from requests.exceptions import RequestException
+from sdcclient import SdSecureClient
 
+SYSDIG_TOKEN = os.environ.get('SECURE_API_TOKEN')
+SYSDIG_URL = os.environ.get('SECURE_URL')
 
 BASE_URL = "https://onionoo.torproject.org";
 BASE_HEADERS = {
 }
+
+# Falco Lists
+TOR_IPV4_NODES = "tor_ipv4_nodes"
+TOR_IPV4_ENTRY_NODES = "tor_ipv4_entry_nodes"
+TOR_IPV4_EXIT_NODES = "tor_ipv4_exit_nodes"
+TOR_IPV6_NODES = "tor_ipv6_nodes"
+TOR_IPV6_ENTRY_NODES = "tor_ipv6_entry_nodes"
+TOR_IPV6_EXIT_NODES = "tor_ipv6_exit_nodes"
 
 # Relay must be seen within the last 3 hours.
 LAST_SEEN_WINDOW = 10800;
@@ -139,16 +151,67 @@ def parse_addresses(relays, last_seen_window):
                         addresses['ipv6_exit'].append(address)
     return addresses
 
+def create_falco_list(falco_list, addresses):
+    ok, res = sdclient.add_falco_list(falco_list, addresses)
+    if not ok:
+        logging.error(f'Error creating Falco list: {res}')
+        return False
+    return True
+
+def update_falco_list(id, addresses):
+    ok, res = sdclient.update_falco_list(id, addresses)
+    if not ok:
+        logging.error(f'Error updating Falco List: {res}')
+        return False
+    return True
+
+def send_falco_list_addresses(falco_list, addresses):
+    # First get Falco List
+    ok, res = sdclient.get_falco_lists_group(falco_list)
+    if not ok:
+        logging.error(f'Could not get Falco Lists: {res}')
+        return None
+
+    if not res:
+        # Create the Falco list
+        ok = create_falco_list(falco_list, addresses)
+    else:
+        # Update existing list
+        # TODO: Assuming only one result here, what if we get two?
+        list_id = res[0].get('id')
+        ok = update_falco_list(list_id, addresses)
+    if not ok:
+        return False
+    
+    return True
+
 
 if __name__ == "__main__":
+    # Fetch TOR Nodes
     relays = fetch_relays();
-    if relays:
-        addresses = parse_addresses(relays, LAST_SEEN_WINDOW)
-        logging.info(f' IPv4: {len(addresses["ipv4"])}')
-        logging.info(f' IPv4 Entry: {len(addresses["ipv4_entry"])}')
-        logging.info(f' IPv4 Exit: {len(addresses["ipv4_exit"])}')
+    if not relays:
+        sys.exit(1)
 
-        logging.info(f' IPv6: {len(addresses["ipv6"])}')
-        logging.info(f' IPv6 Entry: {len(addresses["ipv6_entry"])}')
-        logging.info(f' IPv6 Exit: {len(addresses["ipv6_exit"])}')
-        
+    # Parse out the addresses
+    addresses = parse_addresses(relays, LAST_SEEN_WINDOW)
+    logging.info(f' IPv4: {len(addresses["ipv4"])}')
+    logging.info(f' IPv4 Entry: {len(addresses["ipv4_entry"])}')
+    logging.info(f' IPv4 Exit: {len(addresses["ipv4_exit"])}')
+
+    logging.info(f' IPv6: {len(addresses["ipv6"])}')
+    logging.info(f' IPv6 Entry: {len(addresses["ipv6_entry"])}')
+    logging.info(f' IPv6 Exit: {len(addresses["ipv6_exit"])}')
+    
+    # Connect to Sysdig Secure
+    sdclient = SdSecureClient(SYSDIG_TOKEN, SYSDIG_URL)
+
+    # Insert / Update TOR IP4V Nodes
+    send_falco_list_addresses(TOR_IPV4_NODES, addresses['ipv4'])
+    send_falco_list_addresses(TOR_IPV4_ENTRY_NODES, addresses['ipv4_entry'])
+    send_falco_list_addresses(TOR_IPV4_EXIT_NODES, addresses['ipv4_exit'])
+
+    send_falco_list_addresses(TOR_IPV6_NODES, addresses['ipv6'])
+    send_falco_list_addresses(TOR_IPV6_ENTRY_NODES, addresses['ipv6_entry'])
+    send_falco_list_addresses(TOR_IPV6_EXIT_NODES, addresses['ipv6_exit'])
+
+    # Insert / Update Falco Rules
