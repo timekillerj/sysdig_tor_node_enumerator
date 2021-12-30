@@ -15,7 +15,7 @@ import requests
 from requests.exceptions import RequestException
 from sdcclient import SdSecureClient
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 
 SYSDIG_TOKEN = os.environ.get('SECURE_API_TOKEN')
 SYSDIG_URL = os.environ.get('SECURE_URL')
