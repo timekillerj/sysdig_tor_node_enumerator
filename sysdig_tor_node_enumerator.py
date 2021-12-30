@@ -9,12 +9,13 @@ import datetime
 import re
 from ipaddress import ip_address, IPv4Address
 import os
-import sys
 import time
 
 import requests
 from requests.exceptions import RequestException
 from sdcclient import SdSecureClient
+
+logging.basicConfig(level=logging.INFO)
 
 SYSDIG_TOKEN = os.environ.get('SECURE_API_TOKEN')
 SYSDIG_URL = os.environ.get('SECURE_URL')
@@ -22,6 +23,9 @@ SYSDIG_URL = os.environ.get('SECURE_URL')
 BASE_URL = "https://onionoo.torproject.org";
 BASE_HEADERS = {
 }
+
+# Relay must be seen within the last 3 hours.
+LAST_SEEN_WINDOW = 10800;
 
 # Falco metadata
 TOR_IPV4_NODES = {
@@ -48,11 +52,6 @@ TOR_IPV6_EXIT_NODES = {
     "list_name": "tor_ipv6_exit_nodes",
     "rule_name": "Connection to TOR IPv6 Network Exit Node"
 }
-
-# Relay must be seen within the last 3 hours.
-LAST_SEEN_WINDOW = 10800;
-
-logging.basicConfig(level=logging.INFO)
 
 
 def pretty_print_request(req):
@@ -102,6 +101,10 @@ def fetch_relays():
     except TypeError as e:
         logging.error('Error loading json data: e')
         return None
+    f = open("relays.txt", "w")
+    f.write(json.dumps(response.get('relays'), indent=2))
+    f.close()
+
     return response.get('relays')
 
 
@@ -114,16 +117,19 @@ def parse_addresses(relays, last_seen_window):
         "ipv4_entry": [],
         "ipv6_entry": [],
         "ipv4_exit": [],
-        "ipv6_exit": []
+        "ipv6_exit": [],
     }
 
+    logging.info(f'relays found: {len(relays)}')
     for relay in relays:
         is_entry = False
         is_exit = False
 
         # Check if it's still up
         last_seen = int(datetime.datetime.strptime(relay.get('last_seen'), "%Y-%m-%d %H:%M:%S").timestamp())
+        
         if (last_seen < now - last_seen_window):
+            logging.debug('Skipping old relay last seen: {}'.format(relay.get('last_seen')))
             continue
 
         if "Guard" in relay.get('flags', []):
@@ -133,23 +139,24 @@ def parse_addresses(relays, last_seen_window):
 
         for or_address in relay.get('or_addresses', []):
             or_address_matches= re.findall('^\[?([0-9a-f:.]*)]?:\d+$', or_address)
-            # logging.info(f'or_address_matches: {or_address_matches}')
-            address = or_address_matches[0]
-            ip_type = validIPAddress(f'"{address}"')
-            if not ip_type:
-                break
-            if ip_type == "IPv4" and address not in addresses['ipv4']:
-                addresses['ipv4'].append(f'"{address}"')
-                if is_entry:
-                    addresses['ipv4_entry'].append(f'"{address}"')
-                if is_exit:
-                    addresses['ipv4_exit'].append(f'"{address}"')
-            if ip_type == "IPv6" and address not in addresses['ipv6']:
-                addresses['ipv6'].append(f'"{address}"')
-                if is_entry:
-                    addresses['ipv6_entry'].append(f'"{address}"')
-                if is_exit:
-                    addresses['ipv6_exit'].append(f'"{address}"')
+            logging.debug(f'or_address_matches: {or_address_matches}')
+            for address in or_address_matches:
+                ip_type = validIPAddress(address)
+                if not ip_type:
+                    logging.error(f"NOT A VALID IP: {address}")
+                    break
+                if ip_type == "IPv4" and address not in addresses['ipv4']:
+                    addresses['ipv4'].append(f"'{address}'")
+                    if is_entry:
+                        addresses['ipv4_entry'].append(f"'{address}'")
+                    if is_exit:
+                        addresses['ipv4_exit'].append(f"'{address}'")
+                if ip_type == "IPv6" and address not in addresses['ipv6']:
+                    addresses['ipv6'].append(f"'{address}'")
+                    if is_entry:
+                        addresses['ipv6_entry'].append(f"'{address}'")
+                    if is_exit:
+                        addresses['ipv6_exit'].append(f"'{address}'")
 
         if relay.get('exit_addresses'):
             exit_addresses = relay.get('exit_addresses')
@@ -158,17 +165,24 @@ def parse_addresses(relays, last_seen_window):
                 if not ip_type:
                     break
                 if ip_type == "IPv4" and address not in addresses['ipv4']:
-                    addresses['ipv4'].append(f'"{address}"')
+                    addresses['ipv4'].append(f"'{address}'")
                     if is_entry:
-                        addresses['ipv4_entry'].append(f'"{address}"')
+                        addresses['ipv4_entry'].append(f"'{address}'")
                     if is_exit:
-                        addresses['ipv4_exit'].append(f'"{address}"')
+                        addresses['ipv4_exit'].append(f"'{address}'")
                 if ip_type == "IPv6" and address not in addresses['ipv6']:
-                    addresses['ipv6'].append(f'"{address}"')
+                    addresses['ipv6'].append(f"'{address}'")
                     if is_entry:
-                        addresses['ipv6_entry'].append(f'"{address}"')
+                        addresses['ipv6_entry'].append(f"'{address}'")
                     if is_exit:
-                        addresses['ipv6_exit'].append(f'"{address}"')
+                        addresses['ipv6_exit'].append(f"'{address}'")
+    # Remove duplicates
+    addresses['ipv4'] = list(set(addresses['ipv4']))
+    addresses['ipv4_entry'] = list(set(addresses['ipv4_entry']))
+    addresses['ipv4_exit'] = list(set(addresses['ipv4_exit']))
+    addresses['ipv6'] = list(set(addresses['ipv6']))
+    addresses['ipv6_entry'] = list(set(addresses['ipv6_entry']))
+    addresses['ipv6_exit'] = list(set(addresses['ipv6_exit']))
     return addresses
 
 def create_falco_list(falco_list, addresses):
@@ -231,7 +245,8 @@ def build_rule(rule):
 
 def send_falco_rule(rule):
     # First See if rule exists
-    logging.info(f'Looking for Falco rule')
+    rule_name = rule['rule_name']
+    logging.info(f'Looking for Falco rule: {rule_name}')
     ok, res = sdclient.get_rules_group(rule['rule_name'])
     if not ok:
         logging.error(f'Could not get Falco rules: {res}')
@@ -260,17 +275,19 @@ if __name__ == "__main__":
         # Fetch TOR Nodes
         relays = fetch_relays();
         if not relays:
-            sys.exit(1)
+            logging.error('No relays found, trying again in 60 seconds')
+            time.sleep(60)
+            continue
 
         # Parse out the addresses
         addresses = parse_addresses(relays, LAST_SEEN_WINDOW)
-        logging.debug(f' IPv4: {len(addresses["ipv4"])}')
-        logging.debug(f' IPv4 Entry: {len(addresses["ipv4_entry"])}')
-        logging.debug(f' IPv4 Exit: {len(addresses["ipv4_exit"])}')
+        logging.info(f' IPv4: {len(addresses["ipv4"])}')
+        logging.info(f' IPv4 Entry: {len(addresses["ipv4_entry"])}')
+        logging.info(f' IPv4 Exit: {len(addresses["ipv4_exit"])}')
 
-        logging.debug(f' IPv6: {len(addresses["ipv6"])}')
-        logging.debug(f' IPv6 Entry: {len(addresses["ipv6_entry"])}')
-        logging.debug(f' IPv6 Exit: {len(addresses["ipv6_exit"])}')
+        logging.info(f' IPv6: {len(addresses["ipv6"])}')
+        logging.info(f' IPv6 Entry: {len(addresses["ipv6_entry"])}')
+        logging.info(f' IPv6 Exit: {len(addresses["ipv6_exit"])}')
         
         # Connect to Sysdig Secure
         sdclient = SdSecureClient(SYSDIG_TOKEN, SYSDIG_URL)
