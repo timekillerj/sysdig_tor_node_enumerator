@@ -82,9 +82,8 @@ def is_good_response(resp):
 def simple_get(url):
     logging.debug(f'URL: {url}')
     logging.debug('Fetching {}'.format(url))
-    logging.debug(f'dict: {BASE_HEADERS}')
     try:
-        req = requests.Request('GET', url, headers=BASE_HEADERS)
+        req = requests.Request('GET', url)
         prepared = req.prepare()
         pretty_print_request(prepared)
 
@@ -258,7 +257,7 @@ def build_falco_rule(rule, addresses):
     return file_text    
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Queries the TOR network for relay nodes and populates Falco rules o detect connections to/from them")
+    parser = argparse.ArgumentParser(description="Queries the TOR network for relay nodes and populates Falco rules to detect connections to/from them")
     parser.add_argument(
         "--path", "-p", type=str, dest='path', default="/etc/falco/rules.d",
         help="Path to the rules directory to write Falco rules to.")
@@ -295,7 +294,7 @@ if __name__ == "__main__":
     # Fetch TOR Nodes
     relays = fetch_relays();
     if not relays:
-        logging.error('No relays found, trying again in 60 seconds')
+        logging.error('Errors: No relays found')
         sys.exit(1)
 
     # Parse out the addresses
