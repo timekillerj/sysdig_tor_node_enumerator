@@ -266,7 +266,7 @@ def parse_args():
         help="Write Falco rule to block all ingress and egress traffic to/from any IPv4 TOR node"
     )
     parser.add_argument(
-        "--ipv4_entry", dest="ipv4_entry", action="store_true", default=False
+        "--ipv4_entry", dest="ipv4_entry", action="store_true", default=False,
         help="Write Falco rule to block all egress traffic to any ENTRY IPv4 TOR node"
     )
     parser.add_argument(
