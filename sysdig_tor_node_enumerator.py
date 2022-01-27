@@ -240,7 +240,7 @@ def build_falco_rule(rule, addresses, tags):
   output: "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args"
   priority: "WARNING"
   tags:
-    - "network"
+  - "network"
 """
         for tag in tags:
             _rule = _rule + f"  - {tag}\n"
