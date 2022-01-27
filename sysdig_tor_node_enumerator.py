@@ -14,7 +14,6 @@ import argparse
 import requests
 from requests.exceptions import RequestException
 
-logging.basicConfig(level=logging.INFO)
 
 BASE_URL = "https://onionoo.torproject.org";
 
@@ -259,6 +258,9 @@ def build_falco_rule(rule, addresses):
 def parse_args():
     parser = argparse.ArgumentParser(description="Queries the TOR network for relay nodes and populates Falco rules to detect connections to/from them")
     parser.add_argument(
+        "--debug", "-d", type=str, dest='debug', action="store_true", default=False,
+        help="Print debug information")
+    parser.add_argument(
         "--path", "-p", type=str, dest='path', default="/etc/falco/rules.d",
         help="Path to the rules directory to write Falco rules to.")
     parser.add_argument(
@@ -290,6 +292,11 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
+    if args.debug:
+        logging_level = logging.DEBUG
+    else:
+        logging_level = logging.INFO
+    logging.basicConfig(level=logging_level)
     
     # Fetch TOR Nodes
     relays = fetch_relays();
