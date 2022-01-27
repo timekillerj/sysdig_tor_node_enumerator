@@ -243,7 +243,7 @@ def build_falco_rule(rule, addresses, tags):
     - "network"
 """
         for tag in tags:
-            _rule = _rule + f"    - {tag}"
+            _rule = _rule + f"  - {tag}\n"
         _rule = _rule + """
   source: "syscall"
   append: false
