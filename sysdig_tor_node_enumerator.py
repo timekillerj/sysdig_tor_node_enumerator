@@ -199,9 +199,8 @@ def write_falco_rule(rule, addresses, args):
     logging.info(f'Writing Falco rule {rule["file_name"]}')
     file_text = build_falco_rule(rule,addresses, args.tags, args.severity)
     try:
-        fh = open(f'{args.path}/{rule["file_name"]}', "w")
-        fh.write(file_text)
-        fh.close()
+        with open(f'{args.path}/{rule["file_name"]}', "w") as fh:
+            fh.write(file_text)
     except PermissionError as e:
         logging.error(f'Error writing file {rule["file_name"]}: {e}')
 
@@ -293,7 +292,7 @@ def parse_args():
         help="Write Falco rule to block all ingress traffic from any EXIT IPv6 TOR node"
     )
     parser.add_argument(
-        "--tags", "-t", dest="tags", nargs='+',
+        "--tags", "-t", dest="tags", nargs='+', default=[],
         help="List of tags to associate with generated Falco rules in addition to 'network' which will always be attached." 
     )
     return parser.parse_args()
