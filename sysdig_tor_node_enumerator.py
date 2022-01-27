@@ -9,71 +9,61 @@ import datetime
 import re
 from ipaddress import ip_address, IPv4Address
 import sys
+import argparse
 
 import requests
 from requests.exceptions import RequestException
 
 logging.basicConfig(level=logging.INFO)
 
-##### Configuration #####
-RULE_PATH = "/etc/falco/rules.d"
 BASE_URL = "https://onionoo.torproject.org";
-BASE_HEADERS = {
-}
 
 # Relay must be seen within the last 3 hours.
 LAST_SEEN_WINDOW = 10800;
 
 # Falco metadata
 TOR_IPV4_ALL_NODES = {
-    "write_rule": True,
     "list_name": "tor_ipv4_nodes",
     "rule_name": "Connection to Any TOR IPv4 Network Node",
-    "file_name": f'{RULE_PATH}/tor_ipv4_all_nodes_rules.yaml',
+    "file_name": f'tor_ipv4_all_nodes_rules.yaml',
     "ingress_rule": True,
     "egress_rule": True
 }
 TOR_IPV4_ENTRY_NODES = {
-    "write_rule": True,
     "list_name": "tor_ipv4_entry_nodes",
     "rule_name": "Connection to TOR IPv4 Network Entry Node",
-    "file_name": f'{RULE_PATH}/tor_ipv4_entry_nodes_rules.yaml',
+    "file_name": f'tor_ipv4_entry_nodes_rules.yaml',
     "ingress_rule": False,
     "egress_rule": True
 }
 TOR_IPV4_EXIT_NODES = {
-    "write_rule": True,
     "list_name": "tor_ipv4_exit_nodes",
     "rule_name": "Connection to TOR IPv4 Network Exit Node",
-    "file_name": f'{RULE_PATH}/tor_ipv4_exit_nodes_rules.yaml',
+    "file_name": f'tor_ipv4_exit_nodes_rules.yaml',
     "ingress_rule": True,
     "egress_rule": False
 }
 TOR_IPV6_ALL_NODES = {
-    "write_rule": True,
     "list_name": "tor_ipv6_nodes",
     "rule_name": "Connection to Any TOR IPv6 Network Node",
-    "file_name": f'{RULE_PATH}/tor_ipv6_all_nodes_rules.yaml',
+    "file_name": f'tor_ipv6_all_nodes_rules.yaml',
     "ingress_rule": True,
     "egress_rule": True
 }
 TOR_IPV6_ENTRY_NODES = {
-    "write_rule": True,
     "list_name": "tor_ipv6_entry_nodes",
     "rule_name": "Connection to TOR IPv6 Network Entry Node",
-    "file_name": f'{RULE_PATH}/tor_ipv6_entry_nodes_rules.yaml',
+    "file_name": f'tor_ipv6_entry_nodes_rules.yaml',
     "ingress_rule": False,
     "egress_rule": True
 }
 TOR_IPV6_EXIT_NODES = {
-    "write_rule": True,
-    "list_name": "tor_ipv6_exit_nodes",
+\    "list_name": "tor_ipv6_exit_nodes",
     "rule_name": "Connection to TOR IPv6 Network Exit Node",
-    "file_name": f'{RULE_PATH}/tor_ipv6_exit_nodes_rules.yaml',
+    "file_name": f'tor_ipv6_exit_nodes_rules.yaml',
     "ingress_rule": True,
     "egress_rule": False
 }
-#########################
 
 
 def pretty_print_request(req):
@@ -207,11 +197,11 @@ def parse_addresses(relays, last_seen_window):
     addresses['ipv6_exit'] = list(set(addresses['ipv6_exit']))
     return addresses
 
-def write_falco_rule(rule, addresses):
+def write_falco_rule(path, rule, addresses):
     logging.info(f'Writing Falco rule {rule["file_name"]}')
     file_text = build_falco_rule(rule,addresses)
     try:
-        fh = open(rule["file_name"], "w")
+        fh = open(f'{path}/{rule["file_name"]}', "w")
         fh.write(file_text)
         fh.close()
     except PermissionError as e:
@@ -239,7 +229,7 @@ def build_falco_rule(rule, addresses):
         ingress_rule = ""
     else:
         ingress_rule = f"""
-- rule: {rule['rule_name']}
+- rule: {rule['rule_name']} (ingress)
   desc: "Connections detected in pod or host. The rule was triggered by addresses known to be TOR Nodes"
   condition: "evt.type = connect and evt.dir = < and fd.cip in ({rule['list_name']})"
   output: "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args"
@@ -254,7 +244,7 @@ def build_falco_rule(rule, addresses):
         egress_rule = ""
     else:
         egress_rule = f"""
-- rule: {rule['rule_name']}
+- rule: {rule['rule_name']} (egress)
   desc: "Connections detected in pod or host. The rule was triggered by addresses known to be TOR Nodes"
   condition: "evt.type = connect and evt.dir = < and fd.sip in ({rule['list_name']})"
   output: "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args"
@@ -267,8 +257,41 @@ def build_falco_rule(rule, addresses):
     file_text = description + list + ingress_rule + egress_rule
     return file_text    
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Queries the TOR network for relay nodes and populates Falco rules o detect connections to/from them")
+    parser.add_argument(
+        "--path", "-p", type=str, dest='path', default="/etc/falco/rules.d"
+        help="Path to the rules directory to write Falco rules to.")
+    parser.add_argument(
+        "--ipv4_all", dest="ipv4_all", action="store_true", default=True,
+        help="Write Falco rule to block all ingress and egress traffic to/from any IPv4 TOR node"
+    )
+    parser.add_argument(
+        "--ipv4_entry", dest="ipv4_entry", action="store_true", default=True,
+        help="Write Falco rule to block all egress traffic to any ENTRY IPv4 TOR node"
+    )
+    parser.add_argument(
+        "--ipv4_exit", dest="ipv4_exit", action="store_true", default=True,
+        help="Write Falco rule to block all ingress traffic from any EXIT IPv4 TOR node"
+    )
+    parser.add_argument(
+        "--ipv6_all", dest="ipv6_all", action="store_true", default=True,
+        help="Write Falco rule to block all ingress and egress traffic to/from any IPv6 TOR node"
+    )
+    parser.add_argument(
+        "--ipv6_entry", dest="ipv6_entry", action="store_true", default=True,
+        help="Write Falco rule to block all egress traffic to any ENTRY IPv6 TOR node"
+    )
+    parser.add_argument(
+        "--ipv6_exit", dest="ipv6_exit", action="store_true", default=True,
+        help="Write Falco rule to block all ingress traffic from any EXIT IPv6 TOR node"
+    )
+    return parser.parse_args()
+
 
 if __name__ == "__main__":
+    args = parse_args()
+    
     # Fetch TOR Nodes
     relays = fetch_relays();
     if not relays:
@@ -286,16 +309,16 @@ if __name__ == "__main__":
     logging.info(f' IPv6 Exit: {len(addresses["ipv6_exit"])}')
     
     # Write Rules files
-    if TOR_IPV4_ALL_NODES['write_rule']:
-        write_falco_rule(TOR_IPV4_ALL_NODES, addresses['ipv4_all'])
-    if TOR_IPV4_ENTRY_NODES['write_rule']:
-        write_falco_rule(TOR_IPV4_ENTRY_NODES, addresses['ipv4_entry'])
-    if TOR_IPV4_EXIT_NODES['write_rule']:
-        write_falco_rule(TOR_IPV4_EXIT_NODES, addresses['ipv4_exit'])
+    if args.ipv4_all:
+        write_falco_rule(args.path, TOR_IPV4_ALL_NODES, addresses['ipv4_all'])
+    if args.ipv4_entry:
+        write_falco_rule(args.path, TOR_IPV4_ENTRY_NODES, addresses['ipv4_entry'])
+    if args.ipv4_exit:
+        write_falco_rule(args.path, TOR_IPV4_EXIT_NODES, addresses['ipv4_exit'])
 
-    if TOR_IPV6_ALL_NODES['write_rule']:
-        write_falco_rule(TOR_IPV6_ALL_NODES, addresses['ipv6_all'])
-    if TOR_IPV6_ENTRY_NODES['write_rule']:
-        write_falco_rule(TOR_IPV6_ENTRY_NODES, addresses['ipv6_entry'])
-    if TOR_IPV6_EXIT_NODES['write_rule']:
-        write_falco_rule(TOR_IPV6_EXIT_NODES, addresses['ipv6_exit'])
+    if args.ipv6_all:
+        write_falco_rule(args.path, TOR_IPV6_ALL_NODES, addresses['ipv6_all'])
+    if args.ipv6_entry:
+        write_falco_rule(args.path, TOR_IPV6_ENTRY_NODES, addresses['ipv6_entry'])
+    if args.ipv6_exit:
+        write_falco_rule(args.path, TOR_IPV6_EXIT_NODES, addresses['ipv6_exit'])
