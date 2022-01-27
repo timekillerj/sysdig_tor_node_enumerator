@@ -308,13 +308,13 @@ if __name__ == "__main__":
 
     # Parse out the addresses
     addresses = parse_addresses(relays, LAST_SEEN_WINDOW)
-    logging.info(f' IPv4: {len(addresses["ipv4_all"])}')
-    logging.info(f' IPv4 Entry: {len(addresses["ipv4_entry"])}')
-    logging.info(f' IPv4 Exit: {len(addresses["ipv4_exit"])}')
+    logging.debug(f' IPv4: {len(addresses["ipv4_all"])}')
+    logging.debug(f' IPv4 Entry: {len(addresses["ipv4_entry"])}')
+    logging.debug(f' IPv4 Exit: {len(addresses["ipv4_exit"])}')
 
-    logging.info(f' IPv6: {len(addresses["ipv6_all"])}')
-    logging.info(f' IPv6 Entry: {len(addresses["ipv6_entry"])}')
-    logging.info(f' IPv6 Exit: {len(addresses["ipv6_exit"])}')
+    logging.debug(f' IPv6: {len(addresses["ipv6_all"])}')
+    logging.debug(f' IPv6 Entry: {len(addresses["ipv6_entry"])}')
+    logging.debug(f' IPv6 Exit: {len(addresses["ipv6_exit"])}')
     
     # Write Rules files
     if args.ipv4_all:
