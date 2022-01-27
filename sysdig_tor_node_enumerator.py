@@ -220,43 +220,38 @@ def build_falco_rule(rule, addresses, tags):
   items:
 """
     for address in addresses:
-        list = list + f"- {address}\n"
+        list = list + f"  - {address}\n"
     list = list + "append: false\n"
 
-    if not rule['ingress_rule']:
-        ingress_rule = ""
-    else:
-        ingress_rule = f"""
-- rule: {rule['rule_name']} (ingress)
+    rule_text = ""
+    for direction in ['ingress', 'egress']:
+        if direction == "ingress":
+            fd = "fd.cip"
+        else:
+            fd = "fd.sip"
+
+        if not rule[f'{direction}_rule']:
+            _rule = ""
+        else:
+            _rule = f"""
+- rule: {rule['rule_name']} ({direction})
   desc: "Connections detected in pod or host. The rule was triggered by addresses known to be TOR Nodes"
-  condition: "evt.type = connect and evt.dir = < and fd.cip in ({rule['list_name']})"
+  condition: "evt.type = connect and evt.dir = < and {fd} in ({rule['list_name']})"
   output: "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args"
   priority: "WARNING"
   tags:
     - "network"
 """
         for tag in tags:
-            ingress_rule = ingress_rule + f"- {tag}"
-        ingress_rule = ingress_rule + """
+            _rule = _rule + f"    - {tag}"
+        _rule = _rule + """
   source: "syscall"
   append: false
-"""
 
-    if not rule['egress_rule']:
-        egress_rule = ""
-    else:
-        egress_rule = f"""
-- rule: {rule['rule_name']} (egress)
-  desc: "Connections detected in pod or host. The rule was triggered by addresses known to be TOR Nodes"
-  condition: "evt.type = connect and evt.dir = < and fd.sip in ({rule['list_name']})"
-  output: "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args"
-  priority: "WARNING"
-  tags:
-    - "network"
-  source: "syscall"
-  append: false
-        """
-    file_text = description + list + ingress_rule + egress_rule
+"""
+        rule_text = rule_text + _rule
+
+    file_text = description + list + rule_text
     return file_text    
 
 def parse_args():
