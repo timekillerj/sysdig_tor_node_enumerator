@@ -8,9 +8,7 @@ import json
 import datetime
 import re
 from ipaddress import ip_address, IPv4Address
-import os
 import sys
-import time
 
 import requests
 from requests.exceptions import RequestException
@@ -221,18 +219,18 @@ def write_falco_rule(rule, addresses):
 
 def build_falco_rule(rule, addresses):
     description = """
-    #########################
-    # TOR Node Rule
-    #########################
+#########################
+# TOR Node Rule
+#########################
     
-    # This rule is auto-generated and should not be edited manually!
-    # Rule checks for communication with known TOR relay nodes.
+# This rule is auto-generated and should not be edited manually!
+# Rule checks for communication with known TOR relay nodes.
 
-    --- \n"""
+--- \n"""
     list = f"""
-    - list: "{rule['list_name']}"
-      items:
-    """
+- list: "{rule['list_name']}"
+  items:
+"""
     for address in addresses:
         list = list + f"- {address}\n"
     list = list + "append: false\n"
@@ -241,30 +239,30 @@ def build_falco_rule(rule, addresses):
         ingress_rule = ""
     else:
         ingress_rule = f"""
-        - rule: {rule['rule_name']}
-          desc: "Connections detected in pod or host. The rule was triggered by addresses known to be TOR Nodes"
-          condition: "evt.type = connect and evt.dir = < and fd.cip in ({rule['list_name']})\n"
-          output: "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args"
-          priority: "WARNING"
-          tags:
-        - "ioc"
-        source: "syscall"
-        append: false
-        """
+- rule: {rule['rule_name']}
+  desc: "Connections detected in pod or host. The rule was triggered by addresses known to be TOR Nodes"
+  condition: "evt.type = connect and evt.dir = < and fd.cip in ({rule['list_name']})\n"
+  output: "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args"
+  priority: "WARNING"
+  tags:
+    - "ioc"
+  source: "syscall"
+  append: false
+"""
 
     if not rule['egress_rule']:
         egress_rule = ""
     else:
         egress_rule = f"""
-        - rule: {rule['rule_name']}
-          desc: "Connections detected in pod or host. The rule was triggered by addresses known to be TOR Nodes"
-          condition: "evt.type = connect and evt.dir = < and fd.sip in ({rule['list_name']})\n"
-          output: "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args"
-          priority: "WARNING"
-          tags:
-        - "ioc"
-        source: "syscall"
-        append: false
+- rule: {rule['rule_name']}
+  desc: "Connections detected in pod or host. The rule was triggered by addresses known to be TOR Nodes"
+  condition: "evt.type = connect and evt.dir = < and fd.sip in ({rule['list_name']})\n"
+  output: "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args"
+  priority: "WARNING"
+  tags:
+    - "ioc"
+  source: "syscall"
+  append: false
         """
     file_text = description + list + ingress_rule + egress_rule
     return file_text    
