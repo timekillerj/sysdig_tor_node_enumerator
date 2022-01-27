@@ -262,27 +262,27 @@ def parse_args():
         "--path", "-p", type=str, dest='path', default="/etc/falco/rules.d",
         help="Path to the rules directory to write Falco rules to.")
     parser.add_argument(
-        "--ipv4_all", dest="ipv4_all", action="store_true", default=True,
+        "--ipv4_all", dest="ipv4_all", action="store_true", default=False,
         help="Write Falco rule to block all ingress and egress traffic to/from any IPv4 TOR node"
     )
     parser.add_argument(
-        "--ipv4_entry", dest="ipv4_entry", action="store_true", default=True,
+        "--ipv4_entry", dest="ipv4_entry", action="store_true", default=False
         help="Write Falco rule to block all egress traffic to any ENTRY IPv4 TOR node"
     )
     parser.add_argument(
-        "--ipv4_exit", dest="ipv4_exit", action="store_true", default=True,
+        "--ipv4_exit", dest="ipv4_exit", action="store_true", default=False,
         help="Write Falco rule to block all ingress traffic from any EXIT IPv4 TOR node"
     )
     parser.add_argument(
-        "--ipv6_all", dest="ipv6_all", action="store_true", default=True,
+        "--ipv6_all", dest="ipv6_all", action="store_true", default=False,
         help="Write Falco rule to block all ingress and egress traffic to/from any IPv6 TOR node"
     )
     parser.add_argument(
-        "--ipv6_entry", dest="ipv6_entry", action="store_true", default=True,
+        "--ipv6_entry", dest="ipv6_entry", action="store_true", default=False,
         help="Write Falco rule to block all egress traffic to any ENTRY IPv6 TOR node"
     )
     parser.add_argument(
-        "--ipv6_exit", dest="ipv6_exit", action="store_true", default=True,
+        "--ipv6_exit", dest="ipv6_exit", action="store_true", default=False,
         help="Write Falco rule to block all ingress traffic from any EXIT IPv6 TOR node"
     )
     return parser.parse_args()
