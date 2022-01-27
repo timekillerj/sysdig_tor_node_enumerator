@@ -9,17 +9,16 @@ import datetime
 import re
 from ipaddress import ip_address, IPv4Address
 import os
+import sys
 import time
 
 import requests
 from requests.exceptions import RequestException
-from sdcclient import SdSecureClient
 
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.INFO)
 
-SYSDIG_TOKEN = os.environ.get('SECURE_API_TOKEN')
-SYSDIG_URL = os.environ.get('SECURE_URL')
-
+##### Configuration #####
+RULE_PATH = "/etc/falco/rules.d"
 BASE_URL = "https://onionoo.torproject.org";
 BASE_HEADERS = {
 }
@@ -28,30 +27,55 @@ BASE_HEADERS = {
 LAST_SEEN_WINDOW = 10800;
 
 # Falco metadata
-TOR_IPV4_NODES = {
+TOR_IPV4_ALL_NODES = {
+    "write_rule": True,
     "list_name": "tor_ipv4_nodes",
-    "rule_name": "Connection to TOR IPv4 Network Node"
+    "rule_name": "Connection to Any TOR IPv4 Network Node",
+    "file_name": f'{RULE_PATH}/tor_ipv4_all_nodes_rules.yaml',
+    "ingress_rule": True,
+    "egress_rule": True
 }
 TOR_IPV4_ENTRY_NODES = {
+    "write_rule": True,
     "list_name": "tor_ipv4_entry_nodes",
-    "rule_name": "Connection to TOR IPv4 Network Entry Node"
+    "rule_name": "Connection to TOR IPv4 Network Entry Node",
+    "file_name": f'{RULE_PATH}/tor_ipv4_entry_nodes_rules.yaml',
+    "ingress_rule": False,
+    "egress_rule": True
 }
 TOR_IPV4_EXIT_NODES = {
+    "write_rule": True,
     "list_name": "tor_ipv4_exit_nodes",
-    "rule_name": "Connection to TOR IPv4 Network Exit Node"
+    "rule_name": "Connection to TOR IPv4 Network Exit Node",
+    "file_name": f'{RULE_PATH}/tor_ipv4_exit_nodes_rules.yaml',
+    "ingress_rule": True,
+    "egress_rule": False
 }
-TOR_IPV6_NODES = {
+TOR_IPV6_ALL_NODES = {
+    "write_rule": True,
     "list_name": "tor_ipv6_nodes",
-    "rule_name": "Connection to TOR IPv6 Network Node"
+    "rule_name": "Connection to Any TOR IPv6 Network Node",
+    "file_name": f'{RULE_PATH}/tor_ipv6_all_nodes_rules.yaml',
+    "ingress_rule": True,
+    "egress_rule": True
 }
 TOR_IPV6_ENTRY_NODES = {
+    "write_rule": True,
     "list_name": "tor_ipv6_entry_nodes",
-    "rule_name": "Connection to TOR IPv6 Network Entry Node"
+    "rule_name": "Connection to TOR IPv6 Network Entry Node",
+    "file_name": f'{RULE_PATH}/tor_ipv6_entry_nodes_rules.yaml',
+    "ingress_rule": False,
+    "egress_rule": True
 }
 TOR_IPV6_EXIT_NODES = {
+    "write_rule": True,
     "list_name": "tor_ipv6_exit_nodes",
-    "rule_name": "Connection to TOR IPv6 Network Exit Node"
+    "rule_name": "Connection to TOR IPv6 Network Exit Node",
+    "file_name": f'{RULE_PATH}/tor_ipv6_exit_nodes_rules.yaml',
+    "ingress_rule": True,
+    "egress_rule": False
 }
+#########################
 
 
 def pretty_print_request(req):
@@ -112,8 +136,8 @@ def parse_addresses(relays, last_seen_window):
     logging.info('Parsing addresses out of node results')
     now = int(datetime.datetime.now().timestamp())
     addresses = {
-        "ipv4": [],
-        "ipv6": [],
+        "ipv4_all": [],
+        "ipv6_all": [],
         "ipv4_entry": [],
         "ipv6_entry": [],
         "ipv4_exit": [],
@@ -145,14 +169,14 @@ def parse_addresses(relays, last_seen_window):
                 if not ip_type:
                     logging.error(f"NOT A VALID IP: {address}")
                     break
-                if ip_type == "IPv4" and address not in addresses['ipv4']:
-                    addresses['ipv4'].append(f"'{address}'")
+                if ip_type == "IPv4" and address not in addresses['ipv4_all']:
+                    addresses['ipv4_all'].append(f"'{address}'")
                     if is_entry:
                         addresses['ipv4_entry'].append(f"'{address}'")
                     if is_exit:
                         addresses['ipv4_exit'].append(f"'{address}'")
-                if ip_type == "IPv6" and address not in addresses['ipv6']:
-                    addresses['ipv6'].append(f"'{address}'")
+                if ip_type == "IPv6" and address not in addresses['ipv6_all']:
+                    addresses['ipv6_all'].append(f"'{address}'")
                     if is_entry:
                         addresses['ipv6_entry'].append(f"'{address}'")
                     if is_exit:
@@ -164,149 +188,116 @@ def parse_addresses(relays, last_seen_window):
                 ip_type = validIPAddress(address)
                 if not ip_type:
                     break
-                if ip_type == "IPv4" and address not in addresses['ipv4']:
-                    addresses['ipv4'].append(f"'{address}'")
+                if ip_type == "IPv4" and address not in addresses['ipv4_all']:
+                    addresses['ipv4_all'].append(f"'{address}'")
                     if is_entry:
                         addresses['ipv4_entry'].append(f"'{address}'")
                     if is_exit:
                         addresses['ipv4_exit'].append(f"'{address}'")
-                if ip_type == "IPv6" and address not in addresses['ipv6']:
-                    addresses['ipv6'].append(f"'{address}'")
+                if ip_type == "IPv6" and address not in addresses['ipv6_all']:
+                    addresses['ipv6_all'].append(f"'{address}'")
                     if is_entry:
                         addresses['ipv6_entry'].append(f"'{address}'")
                     if is_exit:
                         addresses['ipv6_exit'].append(f"'{address}'")
     # Remove duplicates
-    addresses['ipv4'] = list(set(addresses['ipv4']))
+    addresses['ipv4_all'] = list(set(addresses['ipv4_all']))
     addresses['ipv4_entry'] = list(set(addresses['ipv4_entry']))
     addresses['ipv4_exit'] = list(set(addresses['ipv4_exit']))
-    addresses['ipv6'] = list(set(addresses['ipv6']))
+    addresses['ipv6_all'] = list(set(addresses['ipv6_all']))
     addresses['ipv6_entry'] = list(set(addresses['ipv6_entry']))
     addresses['ipv6_exit'] = list(set(addresses['ipv6_exit']))
     return addresses
 
-def create_falco_list(falco_list, addresses):
-    logging.info('Creating Falco list')
-    ok, res = sdclient.add_falco_list(falco_list, addresses)
-    if not ok:
-        logging.error(f'Error creating Falco list: {res}')
-        return False
-    return True
+def write_falco_rule(rule, addresses):
+    logging.info(f'Writing Falco rule {rule["file_name"]}')
+    file_text = build_falco_rule(rule,addresses)
+    try:
+        fh = open(rule["file_name"], "w")
+        fh.write(file_text)
+        fh.close()
+    except PermissionError as e:
+        logging.error(f'Error writing file {rule["file_name"]}: {e}')
 
-def update_falco_list(id, addresses):
-    logging.info('Updating Falco list')
-    ok, res = sdclient.update_falco_list(id, addresses)
-    if not ok:
-        logging.error(f'Error updating Falco List: {res}')
-        return False
-    return True
-
-def send_falco_list_addresses(falco_list, addresses):
-    # First get Falco List
-    logging.info(f'Looking for Falco list: {falco_list}')
-    ok, res = sdclient.get_falco_lists_group(falco_list)
-    if not ok:
-        logging.error(f'Could not get Falco Lists: {res}')
-        return None
-
-    if not res:
-        # Create the Falco list
-        ok = create_falco_list(falco_list, addresses)
-    else:
-        # Update existing list
-        # TODO: Assuming only one result here, what if we get two?
-        list_id = res[0].get('id')
-        ok = update_falco_list(list_id, addresses)
-    if not ok:
-        return False
+def build_falco_rule(rule, addresses):
+    description = """
+    #########################
+    # TOR Node Rule
+    #########################
     
-    return True
+    # This rule is auto-generated and should not be edited manually!
+    # Rule checks for communication with known TOR relay nodes.
 
+    --- \n"""
+    list = f"""
+    - list: "{rule['list_name']}"
+      items:
+    """
+    for address in addresses:
+        list = list + f"- {address}\n"
+    list = list + "append: false\n"
 
-def build_rule(rule):
-    list_name = rule['list_name']
-    falco_rule = {
-        "details": {
-            "append": False,
-            "ruleType": "FALCO",
-            "source": "syscall",
-            "output": "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args",
-            "condition": {
-                "condition": f'evt.type = connect and evt.dir = < and fd.sip in ({list_name})\n',
-                "components": []
-            },
-            "priority": "warning"
-        },
-        "description": "Connections detected in pod or host. The rule was triggered by addresses known to be TOR Nodes",
-        "tags": ["ioc"]
-    }
-    return falco_rule
-
-
-def send_falco_rule(rule):
-    # First See if rule exists
-    rule_name = rule['rule_name']
-    logging.info(f'Looking for Falco rule: {rule_name}')
-    ok, res = sdclient.get_rules_group(rule['rule_name'])
-    if not ok:
-        logging.error(f'Could not get Falco rules: {res}')
-        return None
-
-    falco_rule = build_rule(rule)
-
-    if not res:
-        # Create Falco rule
-        falco_rule['name'] = rule['rule_name']
-        logging.info('Creating Falco rule')
-        ok, res = sdclient.add_rule(**falco_rule)
-        if not ok:
-            logging.error(f'Could not create rule: {res}')
+    if not rule['ingress_rule']:
+        ingress_rule = ""
     else:
-        # Update Falco Rule
-        # TODO: Assuming only one result here, what if we get two?
-        falco_rule['id'] = res[0]['id']
-        logging.info('Updating Falco rule')
-        ok, res = sdclient.update_rule(**falco_rule)
-        if not ok:
-            logging.error(f'Could not update rule: {res}')
+        ingress_rule = f"""
+        - rule: {rule['rule_name']}
+          desc: "Connections detected in pod or host. The rule was triggered by addresses known to be TOR Nodes"
+          condition: "evt.type = connect and evt.dir = < and fd.cip in ({rule['list_name']})\n"
+          output: "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args"
+          priority: "WARNING"
+          tags:
+        - "ioc"
+        source: "syscall"
+        append: false
+        """
+
+    if not rule['egress_rule']:
+        egress_rule = ""
+    else:
+        egress_rule = f"""
+        - rule: {rule['rule_name']}
+          desc: "Connections detected in pod or host. The rule was triggered by addresses known to be TOR Nodes"
+          condition: "evt.type = connect and evt.dir = < and fd.sip in ({rule['list_name']})\n"
+          output: "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args"
+          priority: "WARNING"
+          tags:
+        - "ioc"
+        source: "syscall"
+        append: false
+        """
+    file_text = description + list + ingress_rule + egress_rule
+    return file_text    
+
 
 if __name__ == "__main__":
-    while True:
-        # Fetch TOR Nodes
-        relays = fetch_relays();
-        if not relays:
-            logging.error('No relays found, trying again in 60 seconds')
-            time.sleep(60)
-            continue
+    # Fetch TOR Nodes
+    relays = fetch_relays();
+    if not relays:
+        logging.error('No relays found, trying again in 60 seconds')
+        sys.exit(1)
 
-        # Parse out the addresses
-        addresses = parse_addresses(relays, LAST_SEEN_WINDOW)
-        logging.info(f' IPv4: {len(addresses["ipv4"])}')
-        logging.info(f' IPv4 Entry: {len(addresses["ipv4_entry"])}')
-        logging.info(f' IPv4 Exit: {len(addresses["ipv4_exit"])}')
+    # Parse out the addresses
+    addresses = parse_addresses(relays, LAST_SEEN_WINDOW)
+    logging.info(f' IPv4: {len(addresses["ipv4_all"])}')
+    logging.info(f' IPv4 Entry: {len(addresses["ipv4_entry"])}')
+    logging.info(f' IPv4 Exit: {len(addresses["ipv4_exit"])}')
 
-        logging.info(f' IPv6: {len(addresses["ipv6"])}')
-        logging.info(f' IPv6 Entry: {len(addresses["ipv6_entry"])}')
-        logging.info(f' IPv6 Exit: {len(addresses["ipv6_exit"])}')
-        
-        # Connect to Sysdig Secure
-        sdclient = SdSecureClient(SYSDIG_TOKEN, SYSDIG_URL)
+    logging.info(f' IPv6: {len(addresses["ipv6_all"])}')
+    logging.info(f' IPv6 Entry: {len(addresses["ipv6_entry"])}')
+    logging.info(f' IPv6 Exit: {len(addresses["ipv6_exit"])}')
+    
+    # Write Rules files
+    if TOR_IPV4_ALL_NODES['write_rule']:
+        write_falco_rule(TOR_IPV4_ALL_NODES, addresses['ipv4_all'])
+    if TOR_IPV4_ENTRY_NODES['write_rule']:
+        write_falco_rule(TOR_IPV4_ENTRY_NODES, addresses['ipv4_entry'])
+    if TOR_IPV4_EXIT_NODES['write_rule']:
+        write_falco_rule(TOR_IPV4_EXIT_NODES, addresses['ipv4_exit'])
 
-        # Insert / Update TOR IP4V Nodes
-        send_falco_list_addresses(TOR_IPV4_NODES['list_name'], addresses['ipv4'])
-        send_falco_list_addresses(TOR_IPV4_ENTRY_NODES['list_name'], addresses['ipv4_entry'])
-        send_falco_list_addresses(TOR_IPV4_EXIT_NODES['list_name'], addresses['ipv4_exit'])
-
-        send_falco_list_addresses(TOR_IPV6_NODES['list_name'], addresses['ipv6'])
-        send_falco_list_addresses(TOR_IPV6_ENTRY_NODES['list_name'], addresses['ipv6_entry'])
-        send_falco_list_addresses(TOR_IPV6_EXIT_NODES['list_name'], addresses['ipv6_exit'])
-
-        # Insert / Update Falco Rules
-        send_falco_rule(TOR_IPV4_NODES)
-        send_falco_rule(TOR_IPV4_ENTRY_NODES)
-        send_falco_rule(TOR_IPV4_EXIT_NODES)
-
-        send_falco_rule(TOR_IPV6_NODES)
-        send_falco_rule(TOR_IPV6_ENTRY_NODES)
-        send_falco_rule(TOR_IPV6_EXIT_NODES)
-        time.sleep(1800)
+    if TOR_IPV6_ALL_NODES['write_rule']:
+        write_falco_rule(TOR_IPV6_ALL_NODES, addresses['ipv6_all'])
+    if TOR_IPV6_ENTRY_NODES['write_rule']:
+        write_falco_rule(TOR_IPV6_ENTRY_NODES, addresses['ipv6_entry'])
+    if TOR_IPV6_EXIT_NODES['write_rule']:
+        write_falco_rule(TOR_IPV6_EXIT_NODES, addresses['ipv6_exit'])
