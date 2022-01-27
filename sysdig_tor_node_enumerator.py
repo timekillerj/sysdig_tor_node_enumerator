@@ -233,7 +233,7 @@ def build_falco_rule(rule, addresses):
   output: "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args"
   priority: "WARNING"
   tags:
-    - "ioc"
+    - "network"
   source: "syscall"
   append: false
 """
@@ -248,7 +248,7 @@ def build_falco_rule(rule, addresses):
   output: "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args"
   priority: "WARNING"
   tags:
-    - "ioc"
+    - "network"
   source: "syscall"
   append: false
         """
@@ -288,6 +288,10 @@ def parse_args():
     parser.add_argument(
         "--ipv6_exit", dest="ipv6_exit", action="store_true", default=False,
         help="Write Falco rule to block all ingress traffic from any EXIT IPv6 TOR node"
+    )
+    parser.add_argument(
+        "--tag", "-t", dest="tags", nargs='+',
+        help="List of tags to associate with generated Falco rules in addition to 'network' which will always be attached." 
     )
     return parser.parse_args()
 
