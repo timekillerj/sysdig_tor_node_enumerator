@@ -195,9 +195,9 @@ def parse_addresses(relays, last_seen_window):
     addresses['ipv6_exit'] = list(set(addresses['ipv6_exit']))
     return addresses
 
-def write_falco_rule(path, rule, addresses):
+def write_falco_rule(path, rule, addresses, tags):
     logging.info(f'Writing Falco rule {rule["file_name"]}')
-    file_text = build_falco_rule(rule,addresses)
+    file_text = build_falco_rule(rule,addresses, tags)
     try:
         fh = open(f'{path}/{rule["file_name"]}', "w")
         fh.write(file_text)
@@ -205,7 +205,7 @@ def write_falco_rule(path, rule, addresses):
     except PermissionError as e:
         logging.error(f'Error writing file {rule["file_name"]}: {e}')
 
-def build_falco_rule(rule, addresses):
+def build_falco_rule(rule, addresses, tags):
     description = """
 #########################
 # TOR Node Rule
@@ -234,6 +234,10 @@ def build_falco_rule(rule, addresses):
   priority: "WARNING"
   tags:
     - "network"
+"""
+        for tag in tags:
+            ingress_rule = ingress_rule + f"- {tag}"
+        ingress_rule = ingress_rule + """
   source: "syscall"
   append: false
 """
@@ -290,7 +294,7 @@ def parse_args():
         help="Write Falco rule to block all ingress traffic from any EXIT IPv6 TOR node"
     )
     parser.add_argument(
-        "--tag", "-t", dest="tags", nargs='+',
+        "--tags", "-t", dest="tags", nargs='+',
         help="List of tags to associate with generated Falco rules in addition to 'network' which will always be attached." 
     )
     return parser.parse_args()
@@ -322,15 +326,15 @@ if __name__ == "__main__":
     
     # Write Rules files
     if args.ipv4_all:
-        write_falco_rule(args.path, TOR_IPV4_ALL_NODES, addresses['ipv4_all'])
+        write_falco_rule(args.path, TOR_IPV4_ALL_NODES, addresses['ipv4_all'], args.tags)
     if args.ipv4_entry:
-        write_falco_rule(args.path, TOR_IPV4_ENTRY_NODES, addresses['ipv4_entry'])
+        write_falco_rule(args.path, TOR_IPV4_ENTRY_NODES, addresses['ipv4_entry'], args.tags)
     if args.ipv4_exit:
-        write_falco_rule(args.path, TOR_IPV4_EXIT_NODES, addresses['ipv4_exit'])
+        write_falco_rule(args.path, TOR_IPV4_EXIT_NODES, addresses['ipv4_exit'], args.tags)
 
     if args.ipv6_all:
-        write_falco_rule(args.path, TOR_IPV6_ALL_NODES, addresses['ipv6_all'])
+        write_falco_rule(args.path, TOR_IPV6_ALL_NODES, addresses['ipv6_all'], args.tags)
     if args.ipv6_entry:
-        write_falco_rule(args.path, TOR_IPV6_ENTRY_NODES, addresses['ipv6_entry'])
+        write_falco_rule(args.path, TOR_IPV6_ENTRY_NODES, addresses['ipv6_entry'], args.tags)
     if args.ipv6_exit:
-        write_falco_rule(args.path, TOR_IPV6_EXIT_NODES, addresses['ipv6_exit'])
+        write_falco_rule(args.path, TOR_IPV6_EXIT_NODES, addresses['ipv6_exit'], args.tags)
