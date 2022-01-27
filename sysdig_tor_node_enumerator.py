@@ -58,7 +58,7 @@ TOR_IPV6_ENTRY_NODES = {
     "egress_rule": True
 }
 TOR_IPV6_EXIT_NODES = {
-\    "list_name": "tor_ipv6_exit_nodes",
+    "list_name": "tor_ipv6_exit_nodes",
     "rule_name": "Connection to TOR IPv6 Network Exit Node",
     "file_name": f'tor_ipv6_exit_nodes_rules.yaml',
     "ingress_rule": True,
