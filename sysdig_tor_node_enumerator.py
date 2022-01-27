@@ -221,7 +221,7 @@ def build_falco_rule(rule, addresses, tags, severity):
 """
     for address in addresses:
         list = list + f"  - {address}\n"
-    list = list + "append: false\n"
+    list = list + "  append: false\n"
 
     rule_text = ""
     for direction in ['ingress', 'egress']:
