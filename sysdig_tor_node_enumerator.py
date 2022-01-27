@@ -226,7 +226,7 @@ def build_falco_rule(rule, addresses):
 # This rule is auto-generated and should not be edited manually!
 # Rule checks for communication with known TOR relay nodes.
 
---- \n"""
+---"""
     list = f"""
 - list: "{rule['list_name']}"
   items:
@@ -241,7 +241,7 @@ def build_falco_rule(rule, addresses):
         ingress_rule = f"""
 - rule: {rule['rule_name']}
   desc: "Connections detected in pod or host. The rule was triggered by addresses known to be TOR Nodes"
-  condition: "evt.type = connect and evt.dir = < and fd.cip in ({rule['list_name']})\n"
+  condition: "evt.type = connect and evt.dir = < and fd.cip in ({rule['list_name']})"
   output: "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args"
   priority: "WARNING"
   tags:
@@ -256,7 +256,7 @@ def build_falco_rule(rule, addresses):
         egress_rule = f"""
 - rule: {rule['rule_name']}
   desc: "Connections detected in pod or host. The rule was triggered by addresses known to be TOR Nodes"
-  condition: "evt.type = connect and evt.dir = < and fd.sip in ({rule['list_name']})\n"
+  condition: "evt.type = connect and evt.dir = < and fd.sip in ({rule['list_name']})"
   output: "Connections to addresses detected in pod or host that are known TOR Nodes. %proc.cmdline %evt.args"
   priority: "WARNING"
   tags:
