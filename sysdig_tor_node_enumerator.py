@@ -260,7 +260,7 @@ def build_falco_rule(rule, addresses):
 def parse_args():
     parser = argparse.ArgumentParser(description="Queries the TOR network for relay nodes and populates Falco rules o detect connections to/from them")
     parser.add_argument(
-        "--path", "-p", type=str, dest='path', default="/etc/falco/rules.d"
+        "--path", "-p", type=str, dest='path', default="/etc/falco/rules.d",
         help="Path to the rules directory to write Falco rules to.")
     parser.add_argument(
         "--ipv4_all", dest="ipv4_all", action="store_true", default=True,
